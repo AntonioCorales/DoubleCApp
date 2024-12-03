@@ -1,0 +1,219 @@
+datasource db {
+    provider = "mongodb"
+    url      = env("DATABASE_URL")
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+model User {
+    id                   String           @id @default(auto()) @map("_id") @db.ObjectId
+    username             String           @unique
+    password             String?
+    email                String           @unique
+    image                String?
+    roles                UserRole[]
+    verified             Boolean          @default(false)
+    createdAt            DateTime         @default(now())
+    updatedAt            DateTime?
+    createdById          String?          @map("_created_by") @db.ObjectId
+    createdBy            User?            @relation(fields: [createdById], references: [id], name: "createdBy", onDelete: NoAction, onUpdate: NoAction)
+    updatedById          String?          @map("_updated_by") @db.ObjectId
+    updatedBy            User?            @relation(fields: [updatedById], references: [id], name: "updatedBy", onDelete: NoAction, onUpdate: NoAction)
+    mediaRelation        SponsoredMedia[]
+    createdMediaRelation SponsoredMedia[] @relation("createdBy")
+    updatedMediaRelation SponsoredMedia[] @relation("updatedBy")
+    chosenMedia          SponsoredMedia[] @relation("chosenBy")
+    createdUsers         User[]           @relation("createdBy")
+    updatedUsers         User[]           @relation("updatedBy")
+    history              UserHistory[]    @map("_history")
+    version              Int              @default(1) @map("_version")
+    accounts             Account[]
+    sessions             Session[]
+    Authenticator        Authenticator[]
+}
+
+type UserHistory {
+    username    String
+    password    String
+    email       String
+    image       String?
+    roles       UserRole[]
+    verified    Boolean
+    updatedAt   DateTime
+    updatedById String
+}
+
+enum UserRole {
+    SUPER_ADMINISTRATOR
+    ADMINISTRATOR
+    MODERATOR
+    USER
+}
+
+model Day {
+    id             String           @id @default(auto()) @map("_id") @db.ObjectId
+    name           String
+    sponsoredMedia SponsoredMedia[]
+    createdAt      DateTime         @default(now())
+}
+
+model Media {
+    id              String          @id @default(auto()) @map("_id") @db.ObjectId
+    idMal           Int?
+    idAniList       Int?
+    title           MediaTitle
+    image           String?
+    bannerImage     String?
+    genres          String[]
+    tags            String[]
+    description     String?
+    episodes        Int?
+    chapters        Int?
+    volumes         Int?
+    startDate       String
+    endDate         String?
+    seasonYear      String?
+    season          String?
+    status          MediaStatus
+    type            MediaType
+    format          String
+    isAdult         Boolean
+    sponsorRelation SponsoredMedia?
+}
+
+type MediaTitle {
+    english String
+    romaji  String
+    native  String
+}
+
+enum MediaStatus {
+    FINISHED
+    ONGOING
+    NOT_YET_RELEASED
+    CANCELLED
+    HIATUS
+}
+
+enum MediaType {
+    ANIME
+    MANGA
+}
+
+enum MediaFormat {
+    TV
+    TV_SHORT
+    MOVIE
+    SPECIAL
+    OVA
+    ONA
+    MUSIC
+    MANGA
+    NOVEL
+    ONE_SHOT
+}
+
+model SponsoredMedia {
+    id            String                  @id @default(auto()) @map("_id") @db.ObjectId
+    mediaId       String                  @unique @db.ObjectId
+    media         Media                   @relation(fields: [mediaId], references: [id])
+    sponsoredById String                  @map("_sponsored_by") @db.ObjectId
+    sponsoredBy   User                    @relation(fields: [sponsoredById], references: [id])
+    chosenById    String?                 @map("_chosen_by") @db.ObjectId
+    chosenBy      User?                   @relation(fields: [chosenById], references: [id], name: "chosenBy")
+    dayId         String                  @map("_day") @db.ObjectId
+    day           Day                     @relation(fields: [dayId], references: [id])
+    createdAt     DateTime                @default(now())
+    createdById   String                  @map("_created_by") @db.ObjectId
+    createdBy     User                    @relation(fields: [createdById], references: [id], name: "createdBy")
+    updatedAt     DateTime                @updatedAt
+    updatedById   String                  @map("_updated_by") @db.ObjectId
+    updatedBy     User                    @relation(fields: [updatedById], references: [id], name: "updatedBy")
+    obtainingBy   SponsoredMediaObtaining
+    observations  String
+    version       Int                     @default(1) @map("_version")
+    history       SponsoredMediaHistory[] @map("_history")
+}
+
+type SponsoredMediaHistory {
+    mediaId       String
+    sponsoredById String
+    chosenById    String?
+    dayId         String
+    updatedAt     DateTime
+    updatedById   String
+    obtainingBy   SponsoredMediaObtaining
+    observations  String
+    version       Int
+}
+
+enum SponsoredMediaObtaining {
+    PAYED
+    LOT
+    MONTHLY_PRIZE_BITS
+    MONTHLY_PRIZE_SUBS
+    MONTHLY_PRIZE_SUBS_KICK
+    OTHER
+}
+
+// AUTHENTICATION
+
+model Account {
+    id                String  @id @default(auto()) @map("_id") @db.ObjectId
+    userId            String  @db.ObjectId
+    type              String
+    provider          String
+    providerAccountId String
+    refresh_token     String? @db.String
+    access_token      String? @db.String
+    expires_at        Int?
+    token_type        String?
+    scope             String?
+    id_token          String? @db.String
+    session_state     String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerAccountId])
+}
+
+model Session {
+    id           String   @id @default(auto()) @map("_id") @db.ObjectId
+    sessionToken String   @unique
+    userId       String   @db.ObjectId
+    expires      DateTime
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+    id         String   @id @default(auto()) @map("_id") @db.ObjectId
+    identifier String
+    token      String
+    expires    DateTime
+
+    @@unique([identifier, token])
+}
+
+// Optional for WebAuthn support
+model Authenticator {
+    credentialID         String  @id @map("_id")
+    userId               String  @db.ObjectId
+    providerAccountId    String
+    credentialPublicKey  String
+    counter              Int
+    credentialDeviceType String
+    credentialBackedUp   Boolean
+    transports           String?
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, credentialID])
+}
